@@ -539,7 +539,6 @@ plt.tight_layout()
 plt.savefig('Moderately to Highly Correated + RFECV performance_curve.png', dpi = 1080)
 
 
-
 ###############################################################################
 #       5a. Feature Selection Pipeline: Removing Highly Correlated + RFE      #
 ###############################################################################
@@ -578,6 +577,83 @@ estimator = RandomForestClassifier(random_state=42)
 
 # Update classifier parameters
 estimator.set_params(**best_params)
+
+# Get selected features
+X_selected_train = fs.transform(X_all_train)
+X_selected_test = fs.transform(X_all_test)
+
+# Fit classifier
+estimator.fit(X_selected_train, y_all_train)
+
+# Make predictions
+y_pred_train = estimator.predict(X_selected_train)
+y_pred_test = estimator.predict(X_selected_test)
+
+# Measure performance
+accuracy_train = metrics.accuracy_score(y_all_train, y_pred_train)
+accuracy_test = metrics.accuracy_score(y_all_test, y_pred_test)
+
+# Message to user
+print(f'The accuracy of the classifier on the train set was: {accuracy_train*100}')
+print(f'The accuracy of the classifier on the test set was: {accuracy_test*100}')
+
+
+###############################################################################
+#    6a. Feature Selection: Tune RF, Select Features, Evaluate Performance    #
+###############################################################################
+# Initiate classifier instance
+estimator = RandomForestClassifier(random_state=42)
+
+# Define parameter grid
+param_grid = { 'n_estimators': [200],
+                'class_weight': [None, 'balanced'],
+                'max_features': ['auto', 'sqrt', 'log2'],
+                'max_depth' : [3, 4, 5, 6, 7, 8],
+                'min_samples_split': [0.005, 0.01, 0.05, 0.10],
+                'min_samples_leaf': [0.005, 0.01, 0.05, 0.10],
+                'criterion' :['gini', 'entropy']     ,
+                'n_jobs': [-1]
+                 }
+
+# Initialize GridSearch object
+gscv = GridSearchCV(estimator, param_grid, cv = 5,  n_jobs= -1, verbose = 1, scoring = 'accuracy')
+
+# Fit gscv
+gscv.fit(X_all_train, y_all_train)
+
+# Get best parameters and score
+best_params = gscv.best_params_
+best_score = gscv.best_score_
+
+# Update classifier parameters
+estimator.set_params(**best_params)
+
+# Define steps
+step1 = {'Constant Features': {'frac_constant_values': 0.95}}
+
+step2 = {'Correlated Features': {'correlation_threshold': 0.80}}
+
+step3 = {'Relevant Features': {'cv': 5,
+                               'estimator': estimator,
+                                'n_estimators': 1000,
+                                'max_iter': 50,
+                                'verbose': 0,
+                                'random_state': 42}}
+
+step4 = {'RFECV Features': {'cv': 5,
+                            'estimator': estimator,
+                            'step': 1,
+                            'scoring': 'accuracy',
+                            'verbose': 50}}
+
+# Place steps in a list in the order you want them execute it
+steps = [step1, step2, step3, step4]
+
+# Initialize FeatureSelector()
+fs = FeatureSelector()
+
+# Apply feature selection methods in the order they appear in steps
+fs.fit(X_all_train, y_all_train, steps)
 
 # Get selected features
 X_selected_train = fs.transform(X_all_train)
